@@ -295,7 +295,7 @@ https://api.mywebsite.com/users?sort=joined&limit=5
 
     + Schema
 
-            <!-- include(example-schema.json) -->
+            
 
 # Group Tags and Tagging Long Title
 Get or set tags on notes
