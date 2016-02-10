@@ -1,7 +1,7 @@
 FORMAT: 1A
-HOST: https://api.example.com
+HOST: https://api.capio.ai
 
-# API Title
+# Capio Developer Guide
 [Markdown](http://daringfireball.net/projects/markdown/syntax) **formatted** description.
 
 ## Subtitle
