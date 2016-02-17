@@ -1,0 +1,337 @@
+FORMAT: 1A
+HOST: https://partnersdev.capio.ai/api/v1/
+
+# Capio
+
+This page will help you get started with Capio. You'll be up and running in a jiffy!
+
+Welcome to the Capio API! This API lets use access some of Capio's components - automated speech recognition and natural language understanding.
+
+## API Key
+In order to consume the API, you will need an API key. You may request an API from your point of contact at Capio.
+
+## Notes
+This API is still under development, but we're working hard to improve it! If you notice the docs are out of date or are unclear, please don't be shy about clicking the "Suggest Edits" link! We're working to keep these docs up to date, however sometimes we get behind – and we'd love your help.
+
+## Speech Recognition Flowchart
+Below is a flowchart describing the connection process from a client to Capio’s embedded ASR server.
+Once connection to ASR-Server is established, the client the client need to send a context message (Context Message) with parameters detailed [later](#context). 
+After the context is sent, the client sends a stream of audio packets (Audio Message) to the ASR-Server, 
+and asynchronously receives speech recognition results (Result Message). 
+This will provide customized ASR service based on speech context and user preferences.
+
+![Flowchart](https://www.filepicker.io/api/file/KWZwj7KATsuwZDF981MX)
+ASR server flowchart (dotted block is optional)
+
+
+## Transcription [/speech/transcribe]
+Using Capio's API, you may upload your audio file and request transcription. 
+Capio offers a REST API and Websocket API. 
+Once you get used to the flow and concept by REST API, we recommend to use Websocket API for less transaction overheads.
+
+### REST API [POST] 
+REST API takes a request with audio file and context. 
+
+#### cURL API call example
+Once you launch your service and have the API key, try the following sample cURL call:
+
+    curl https://partnersdev.capio.ai/api/v1/speech/transcribe -X POST -F "audio=@<audio_file>" -F "context={\"apiKey\":\"<api_key>\",\"language\":\"en-us\"}"
+
+#### <a name="context" />Context Parameters
+As you see in the above cURL call, a trascription request requires a JSON object called "context".
+Context need to include your API key and language selection, and can also contain your preferences for transcription.
+The following table shows the fields for a context.
+
+| Fields    | Description   | Example   | Required? (default)
+| ------------- |-------------|--------- | ---------
+| apiKey    | API key generated for your service   | 1234567890asdfghjkl   | **Yes**
+| language    | Language   | en-us   | **Yes**
+| partial    | Enable partial results | true / false   | No (true)
+| autostop    | Disable server side to detect the end of utterance | true / false   | No (true)
+
+
+#### <a name="result" />Result message
+The Result Message is in the format of a JSON "result" object. 
+Partial results are returned from the ASR server asynchronously while the audio packets are being received. 
+The final result ("final": true) is returned once the user has completed speaking. 
+The result message is structured as follows:
+
+* result : main ASR result JSON array object
+    * alternative:  n-best results in an array
+        * confidence: sentence level confidence score (float)
+        * transcript: recognized word sentence (string)
+        * (optional) timestamp: word level timestamp in an array of {word, start_time, end_time}
+        * (optional) word_confidence: word level confidence in array of {word, confidence}
+        * stability: sentence stability provided for a partial result indicating how likely the result is to change (flow)
+    * final: end of sentence recognition (boolean - true for final results and false for partial results)
+* result_index: index of this sentence since start of transaction (int)
+
+##### Example response
+```JSON
+{
+    "result":[
+        {
+            "stability":0.9,    //optional: only for partial hypothesis
+            "alternative":[
+                {
+                "confidence":0.6563087704653612,
+                "transcript":"show me the weather forecast for chicago usa and two days from now"
+                }, {
+                "confidence":0.2848067295368003,
+                "transcript":"show me the weather forecast for chicago usa in two days from now"
+                }, {
+                "confidence":0.05888449999783865,
+                "transcript":"show me the weather forecast for chicago usa two days from now"
+                }
+            ],
+            "final":true
+        }
+    ]
+    "result_index":0
+}
+```
+
++ Request
+
+    + Form
+        file=@<file_name>
+
++ Response 201 (application/json)
+//check the codes for responses
+    + Body
+            [
+                {
+                    "result":[
+                        {
+                            "stability":0.9,    //optional: only for partial hypothesis
+                            "alternative":[
+                                {
+                                "confidence":0.6563087704653612,
+                                "transcript":"show me the weather forecast for chicago usa and two days from now"
+                                }, {
+                                "confidence":0.2848067295368003,
+                                "transcript":"show me the weather forecast for chicago usa in two days from now"
+                                }, {
+                                "confidence":0.05888449999783865,
+                                "transcript":"show me the weather forecast for chicago usa two days from now"
+                                }
+                            ],
+                            "final":true
+                        }
+                    ]
+                }
+                :
+            ]
+
+### Websocket API [POST]
+Capio's realtime streaming API is exposed over WebSockets via socket.io. 
+Websocket API expects the same flow of transactions and the same structure of [context](#context) and [result](#result) messages as the REST API. 
+Client libraries for socket.io exist for a variety of programming languages.
+The pseudocode below demonstrates the consumption of the API in C#, Java and NodeJS:
+
+#### Node.JS pseudocode
+```node
+var socket = io.connect('wss://partners.capio.ai');
+
+var requestContext = {
+    sys: 'GPU',
+    userID: 'generic@dev.capio.ai',
+    scriptID: 0,
+    apiKey: '<api_key>'
+    language: 'en-us',
+    prompt: 'partial',
+    partial: true,
+    autostop: false,
+    nbest: 1,
+    pronunciation: 1,
+    transactionID: transactionID
+};
+
+socket.on('connect', function () {
+    console.log('Connected to WebSocket endpoint: ' + program.endpoint);
+    console.log('Sending context: ' + requestContext);
+    socket.send({ context: requestContext }, function () {
+        fs.readFile(program.audio, function (err, buffer) {
+            console.log('Sending audio file: ' + program.audio);
+            socket.send({ audio: buffer }, function () {
+                console.log('Sending audio termination command');
+                socket.send({ disconnect: true });
+            });
+        });
+    });
+});
+
+socket.on('connect_error', function (data) {
+    console.log('Unable to connect to WebSocket endpoint:' + program.endpoint);
+    console.log("ERROR: ", data);
+    process.exit(-1);
+});
+
+socket.on('message', function (data) {
+    console.log(data);
+});
+
+socket.on('disconnect', function () {
+    console.log('Disconnected from WebSocket endpoint');
+});
+```
+
+#### Java pseudocode
+```java
+String audioPath = args.length == 1 ? args[0] : "audio.wav";
+
+final Semaphore semaphore = new Semaphore(0);
+
+final JSONObject audio = new JSONObject();
+
+audio.put("audio", readFile(audioPath)); // Read the audio file as a array
+
+final JSONObject disconnect = new JSONObject();
+disconnect.put("disconnect", true);
+
+IO.Options options = new IO.Options();
+options.forceNew = true;
+options.reconnection = false;
+options.transports = new String[] {
+  "websocket"
+};
+
+final Socket socket = IO.socket("http://partners.capio.ai", options);
+
+socket.on(Socket.EVENT_CONNECT, new Emitter.Listener() {
+
+  public void call(Object...args) {
+    
+    // Send the context JSONObject
+    socket.send(context);
+    
+    // If the audio file is larger than 10000 bytes, loop through it and send it in smaller chunks.
+    socket.send(audio);
+  }
+});
+
+socket.on(Socket.EVENT_MESSAGE, new Emitter.Listener() {
+
+  public void call(Object...args) {
+
+    System.out.println(args[0]);
+
+    semaphore.release();
+  }
+});
+
+socket.on(Socket.EVENT_DISCONNECT, new Emitter.Listener() {
+
+  public void call(Object...args) {
+
+  }
+});
+
+socket.on(Socket.EVENT_ERROR, new Emitter.Listener() {
+
+  public void call(Object...args) {
+
+  }
+});
+
+socket.connect();
+
+semaphore.acquire();
+
+socket.send(disconnect);
+```
+
+#### C# pseudocode
+```cs
+ManualResetEvent resetEvent = new ManualResetEvent(false);
+
+string audioFilePath = "//path/to/audio.wav"; //Should be a 16KHz uncompressed wav file
+
+byte[] audioFile = File.ReadAllBytes(audioFilePath);
+
+var ctx = new JObject
+{
+    {"sys", "GPU"},
+    {"userID", "test@dev.capio.ai"},
+    {"scriptID", 0},
+    {"apiKey", "<api_key>"},
+    {"language", "en-US"},
+    {"prompt", "partial"},
+    {"partial", false},
+    {"autostop", false},
+    {"nlu", false},
+    {"nbest", 1},
+    {"pronunciation", 0}
+}.ToString();
+
+var context = new JObject
+{
+    {"context", ctx}
+};
+
+var disconnect = new JObject
+{
+    {"disconnect", true}
+};
+
+var options = new IO.Options { Transports = ImmutableList.Create("websocket") };
+
+var socket = IO.Socket("wss://partners.capio.ai", options);
+
+socket.On(Socket.EVENT_CONNECT, () =>
+{
+    Console.WriteLine("C O N N E C T");
+
+    Console.WriteLine("Sending context");
+    socket.Send(context);
+
+    Thread.Sleep(1000);
+
+    Console.WriteLine("Sending audio");
+
+    // Each audio chunk should not exceed 100000 bytes
+    for (int i = 0; i <= audioFile.Length; i += 100000)
+    {
+        var arr = audioFile.Skip(i).Take(100000).ToArray();
+
+        var audio = new JObject
+        {
+            {"audio", arr }
+        };
+
+        socket.Send(audio);
+    }
+
+    Thread.Sleep(1000);
+
+    Console.WriteLine("Sending disconnect");
+    socket.Send(disconnect);
+});
+
+socket.On(Socket.EVENT_MESSAGE, data =>
+{
+    Console.WriteLine(data.ToString());
+});
+
+socket.On(Socket.EVENT_CONNECT_ERROR, (err) =>
+{
+    Console.WriteLine("E R R O R");
+
+    Console.WriteLine(err.ToString());
+});
+
+socket.On(Socket.EVENT_CONNECT_TIMEOUT, (err) =>
+{
+    Console.WriteLine("T I M E O U T");
+
+    Console.WriteLine(err.ToString());
+});
+
+socket.On(Socket.EVENT_DISCONNECT, (err) =>
+{
+    Console.WriteLine("D I S C O N N E C T");
+
+    resetEvent.Set();
+});
+
+resetEvent.WaitOne();
