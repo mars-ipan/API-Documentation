@@ -35,7 +35,7 @@ REST API takes a request with audio file and context.
 #### cURL API call example
 Once you launch your service and have the API key, try the following sample cURL call:
 
-    curl https://partnersdev.capio.ai/api/v1/speech/transcribe -X POST -F "audio=@<audio_file>" -F "context={\"apiKey\":\"<api_key>\",\"language\":\"en-us\"}"
+    curl -X POST -F "audio=@<audio_file>" -F "context={\"apiKey\":\"<api_key>\"}" "https://partnersdev.capio.ai/api/v1/speech/transcribe"
 
 #### <a name="context" />Context Parameters
 As you see in the above cURL call, a trascription request requires a JSON object called "context".
@@ -45,14 +45,15 @@ The following table shows the fields for a context.
 | Fields    | Description   | Example   | Required? (default)
 | ------------- |-------------|--------- | ---------
 | apiKey    | API key generated for your service   | 1234567890asdfghjkl   | **Yes**
-| language    | Language   | en-us   | **Yes**
-| partial    | Enable partial results | true / false   | No (true)
-| autostop    | Disable server side to detect the end of utterance | true / false   | No (true)
+| partial    | Enable partial results | true / false   | No (false)
+| autostop    | Enable server side to detect the end of utterance | true / false   | No (false)
+| timestamp   | Add word level timestamp to result message | true / false | No (false)
+| word_confidence | Add word level confidence to result message | true / false | No (false)
 
 
 #### <a name="result" />Result message
-The Result Message is in the format of a JSON "result" object. 
-Partial results are returned from the ASR server asynchronously while the audio packets are being received. 
+When your request is processed correctly, a Result Message is sent in the format of a JSON "result" object. 
+Partial results are returned from the ASRserver asynchronously while the audio packets are being received. 
 The final result ("final": true) is returned once the user has completed speaking. 
 The result message is structured as follows:
 
@@ -66,105 +67,184 @@ The result message is structured as follows:
     * final: end of sentence recognition (boolean - true for final results and false for partial results)
 * result_index: index of this sentence since start of transaction (int)
 
-##### Example response
+##### Example partial response
 ```JSON
 {
     "result":[
         {
-            "stability":0.9,    //optional: only for partial hypothesis
-            "alternative":[
-                {
-                "confidence":0.6563087704653612,
-                "transcript":"show me the weather forecast for chicago usa and two days from now"
-                }, {
-                "confidence":0.2848067295368003,
-                "transcript":"show me the weather forecast for chicago usa in two days from now"
-                }, {
-                "confidence":0.05888449999783865,
-                "transcript":"show me the weather forecast for chicago usa two days from now"
-                }
-            ],
-            "final":true
+        "alternative":[
+            {
+            "transcript":"<silence> I am"
+            }
+        ],
+        "final":false,
+        "stability":1
         }
-    ]
+    ],
     "result_index":0
 }
 ```
 
-+ Request
+##### Example final response
+```JSON
+{
+    "result":[
+        {
+        "alternative":[
+            {
+                "confidence":1,
+                "timestamp":[
+                    [
+                        "<silence>",
+                        0,
+                        0.27190783619880676
+                    ],
+                    [
+                        "I",
+                        0.27190783619880676,
+                        0.42173266410827637
+                        ],
+                    [
+                        "am",
+                        0.42173266410827637,
+                        0.57999998331069946
+                    ],
+                    :
+                    :
+                    [
+                        "<silence>",
+                        2.3499999046325684,
+                        2.559999942779541
+                    ]
+                ]
+                "transcript":"<silence> I am going to be busy <silence> this weekend <silence>",
+                "word_confidence":[
+                    [
+                        "<silence>",
+                        1
+                    ],
+                    [
+                        "I",
+                        0.93640512228012085
+                    ],
+                    [
+                        "am",
+                        0.93640512228012085
+                    ]
+                    :
+                    :
+                    [
+                        "<silence>",
+                        1
+                    ]
+                ]
+            }
+        ],
+        "final":true
+        }
+    ],
+    "result_index": 0,
+    "transactionID": "abcdefghijklmnopqrstuvwxyz12345"
+}
+```
+#### Error messages
+Error messages are sent when your request is not processed. The following table shows the error messages and their reasons.
 
-    + Form
-        file=@<file_name>
+| Code    | Message   | How to fix
+| ------------- |-------------|--------- 
+| 400    | Please use [audio] for the audio file field name in your POST request.   | Include '-F "audio=@<audio_file>"'
+| 400    | API Key not provided. Please use the [apiKey] or [context] parameter in your POST request. | Include '-F "context={\"apiKey\":\"<apiKey>\"}"'
+| 500    | Error processing media file. | Upload audio file
+
++ Request (multipart/form-data; boundary=---BOUNDARY)
+
+    -----BOUNDARY
+    Content-Disposition: form-data; name="audio"; filename="test.wav"
+    Content-Type: application/octet-stream
+    
+    -----BOUNDARY
+    Content-Disposition: form-data; name="context"
+    Content-Type: application/json
+    
+    context={"apiKey":"<api_key>"}
+    -----BOUNDARY
 
 + Response 201 (application/json)
-//check the codes for responses
     + Body
-            [
+        {
+            "result":[
                 {
-                    "result":[
+                    "stability":0.9,    //optional: only for partial hypothesis
+                    "alternative":[
                         {
-                            "stability":0.9,    //optional: only for partial hypothesis
-                            "alternative":[
-                                {
-                                "confidence":0.6563087704653612,
-                                "transcript":"show me the weather forecast for chicago usa and two days from now"
-                                }, {
-                                "confidence":0.2848067295368003,
-                                "transcript":"show me the weather forecast for chicago usa in two days from now"
-                                }, {
-                                "confidence":0.05888449999783865,
-                                "transcript":"show me the weather forecast for chicago usa two days from now"
-                                }
-                            ],
-                            "final":true
+                        "confidence":0.6563087704653612,
+                        "transcript":"show me the weather forecast for chicago usa and two days from now"
+                        }, {
+                        "confidence":0.2848067295368003,
+                        "transcript":"show me the weather forecast for chicago usa in two days from now"
+                        }, {
+                        "confidence":0.05888449999783865,
+                        "transcript":"show me the weather forecast for chicago usa two days from now"
                         }
-                    ]
+                    ],
+                    "final":true
                 }
-                :
             ]
+        }
+            
++ Response 400 (application/json)
+    + Body
+        {
+            "code":400,
+            "message":"Please use [audio] for the audio file field name in your POST request."
+        }
+        
++ Response 500 (application/json)
+    + Body
+        {
+            "code":500,
+            "message":"Error processing media file."
+        }
 
 ### Websocket API [POST]
 Capio's realtime streaming API is exposed over WebSockets via socket.io. 
 Websocket API expects the same flow of transactions and the same structure of [context](#context) and [result](#result) messages as the REST API. 
-Client libraries for socket.io exist for a variety of programming languages.
+
+#### Reference client
+You can see and download the reference client and implementation in NodeJS at [our Git repository](http://git.capio.ai/capio/tools-generic-internal/tree/public-node-client/node-asr-client).
+
+#### Pseudocodes
 The pseudocode below demonstrates the consumption of the API in C#, Java and NodeJS:
 
-#### Node.JS pseudocode
-```node
-var socket = io.connect('wss://partners.capio.ai');
+##### Node.JS: Complete client code is [here](http://git.capio.ai/capio/tools-generic-internal/blob/public-node-client/node-asr-client/app.js)
 
+```Javascript
 var requestContext = {
-    sys: 'GPU',
-    userID: 'generic@dev.capio.ai',
-    scriptID: 0,
-    apiKey: '<api_key>'
-    language: 'en-us',
-    prompt: 'partial',
-    partial: true,
-    autostop: false,
-    nbest: 1,
-    pronunciation: 1,
-    transactionID: transactionID
+    'apiKey': '<api_key>',
+    'clientType': 'NodeJS',
+    'partial': false,
+    'autostop': false,
+    'nbest': 1
 };
 
-socket.on('connect', function () {
-    console.log('Connected to WebSocket endpoint: ' + program.endpoint);
-    console.log('Sending context: ' + requestContext);
-    socket.send({ context: requestContext }, function () {
-        fs.readFile(program.audio, function (err, buffer) {
-            console.log('Sending audio file: ' + program.audio);
-            socket.send({ audio: buffer }, function () {
-                console.log('Sending audio termination command');
-                socket.send({ disconnect: true });
-            });
-        });
-    });
-});
+var socket = io.connect('ws://partners.capio.ai', {transports: ['websocket']});
 
 socket.on('connect_error', function (data) {
-    console.log('Unable to connect to WebSocket endpoint:' + program.endpoint);
-    console.log("ERROR: ", data);
-    process.exit(-1);
+  console.log('Unable to connect to WebSocket endpoint');
+  console.log("ERROR: ", data);
+  process.exit(-1);
+});
+
+socket.on('connect', function () {
+  socket.send({ context: JSON.stringify(requestContext) }, function () {
+    var data = fs.readFileSync(program.args[0]);
+
+    for (var i = 0; i < data.length; i += packetSize) {
+      chunk = data.slice(i, i + packetSize);
+      socket.send({ audio: chunk });
+    }
+    socket.send({ disconnect: true })
+  });
 });
 
 socket.on('message', function (data) {
@@ -172,12 +252,13 @@ socket.on('message', function (data) {
 });
 
 socket.on('disconnect', function () {
-    console.log('Disconnected from WebSocket endpoint');
+  process.exit(0);
 });
 ```
 
-#### Java pseudocode
-```java
+##### Java
+
+```Java
 String audioPath = args.length == 1 ? args[0] : "audio.wav";
 
 final Semaphore semaphore = new Semaphore(0);
@@ -241,7 +322,7 @@ semaphore.acquire();
 socket.send(disconnect);
 ```
 
-#### C# pseudocode
+##### C\# 
 ```cs
 ManualResetEvent resetEvent = new ManualResetEvent(false);
 
